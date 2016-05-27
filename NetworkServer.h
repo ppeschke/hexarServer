@@ -5,6 +5,7 @@
 #include <WinSock2.h>
 #include <list>
 #include <mutex>
+#include <fstream>
 using namespace std;
 #include "Message.h"
 
@@ -25,6 +26,7 @@ public:
 	void Broadcast(const char* message);
 	unsigned int ClientCount();
 
+	ofstream serverfile;
 	mutex locker;
 	list<Message> messages;
 	unsigned int port;
@@ -32,6 +34,7 @@ public:
 	SOCKET Socket;
 	sockaddr_in ServerAddress;
 	sockaddr_in IncomingAddress;
+	sockaddr_in ZeroAddress;
 	sockaddr_in ClientAddresses[CLIENTS];
 	char Buffer[256];
 	int AddressLength;

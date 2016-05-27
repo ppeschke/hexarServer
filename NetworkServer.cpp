@@ -1,9 +1,11 @@
 #include "NetworkServer.h"
 #include <iostream>
+#include <cstring>
 using namespace std;
 
 NetworkServer::NetworkServer()
 {
+	serverfile.open("NetworkServer.log");
 	running = true;
 	port = 17000;
 	AddressLength = sizeof(IncomingAddress);
@@ -18,6 +20,7 @@ NetworkServer::NetworkServer()
 
 	for(int i = 0; i < CLIENTS; ++i)
 		ZeroMemory(&ClientAddresses[i], sizeof(sockaddr_in));
+	ZeroMemory(&ZeroAddress, sizeof(sockaddr_in));
 
 	ZeroMemory(&ServerAddress, AddressLength);
 	ServerAddress.sin_family = AF_INET;
@@ -30,6 +33,7 @@ NetworkServer::NetworkServer()
 
 NetworkServer::~NetworkServer()
 {
+	serverfile.close();
 	running = false;
 	WaitForSingleObject(ListenThreadHandle, INFINITE);	//wait for listen thread to quit
 	WSACleanup();
@@ -42,7 +46,8 @@ void NetworkServer::Listen()
 		if(recvfrom(Socket, Buffer, 256, 0, (sockaddr*)&IncomingAddress, &AddressLength))
 		{
 			Buffer[255] = '\0';	//security! always end packet with this
-
+			if(IncomingAddress.sin_addr.s_addr == ZeroAddress.sin_addr.s_addr)
+				continue;
 			if(Buffer[0] == 1)	//knock packet
 			{
 				for(int i = 0; i < CLIENTS; ++i)	//search for an empty address
@@ -50,7 +55,8 @@ void NetworkServer::Listen()
 					if(!ClientAddresses[i].sin_family)
 					{
 						ClientAddresses[i] = IncomingAddress;
-						//cout << "Server Broadcasting: Client has connected. Welcome!" << endl;
+						cout << "Server Broadcasting: Client has connected. Welcome!" << endl;
+						serverfile << "Server Broadcasting: Client has connected. Welcome!" << endl;
 						Broadcast("Client has connected. Welcome!");
 						break;
 					}
@@ -66,17 +72,19 @@ void NetworkServer::Listen()
 						Buffer[0] = 0;
 						Send(Buffer, i);
 						ZeroMemory(&ClientAddresses[i], sizeof(sockaddr_in));
-						//cout << "Client " << i << " has disconnected." << endl;
+						cout << "Client " << i << " has disconnected." << endl;
+						serverfile << "Client " << i << " has disconnected." << endl;
 						Broadcast("Client has disconnected.");
+						break;
 					}
 					else if(ClientAddresses[i].sin_family)
 						found = true;
 				}
-				if(!found)
+				/*if(!found)
 				{
-					//cout << "No clients left... quitting server..." << endl;
+					cout << "No clients left... quitting server..." << endl;
 					running = false;
-				}
+				}*/
 			}
 			else
 			{
@@ -92,6 +100,7 @@ void NetworkServer::Listen()
 				if(client != 42)
 				{
 					//add to queue
+					cout << "Adding to queue: " << Buffer << endl;
 					locker.lock();
 					messages.insert(messages.end(), Message(Buffer, client));
 					locker.unlock();
