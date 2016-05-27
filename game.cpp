@@ -1,7 +1,8 @@
 #include "game.h"
 
-Game::Game(void)
+Game::Game(unsigned int pN)
 {
+	playerNum = pN;
 	over = true;
 	turn = 1;
 }

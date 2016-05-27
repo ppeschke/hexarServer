@@ -1,26 +1,14 @@
 #pragma once
-
-#define _WINSOCKAPI_
-#include <winsock2.h>
-#include <stdio.h>
-
 #include "game.h"
 #include "player.h"
-
-#pragma comment(lib, "Ws2_32.lib")
+#include "NetworkServer.h"
 
 class server
 {
 public:
-	server(unsigned int port);
+	NetworkServer* networkComponent;
+	server(NetworkServer* ns);
 	~server(void);
-	bool recv();
-	void handleMsgOld();
-	void handleMsg(Game* thegame);
-	void handleSMsg(Game* thegame);
-	void broadcast(const char*);
-	void send(const char* msg, sockaddr_in recpnt);
+	void handleMessages();
 	bool empty();
-
-	unsigned int server_port;
 };

@@ -14,8 +14,8 @@ base* getHexagon(Game* thegame, int i, int p);
 player* getPlayer(player players[], sockaddr_in addy);
 
 NetworkServer networkServer;
-server Server(17000);	//server starts automagically
-Game thegame;
+server Server(&networkServer);
+Game thegame(CLIENTS);
 
 action parseMessage(char []);
 float distance(float x1, float y1, float x2, float y2);
@@ -28,9 +28,7 @@ string toString(int);
 
 int main()
 {
-	int pN = 1;
 	int boardsize = 4;
-	thegame.playerNum = pN;
 	if(boardsize < thegame.playerNum * 2)
 		boardsize = thegame.playerNum * 2;
 	bool picked = false;	//indicates if they've picked their colors
@@ -38,10 +36,7 @@ int main()
 	cout << "waiting for " << thegame.playerNum << " players to connect" << endl;
 	while(!picked)
 	{
-		if(Server.recv())
-		{
-			Server.handleSMsg(&thegame);
-		}
+		Server.handleMessages();
 		picked = true;
 		for(int i = 0; i < thegame.playerNum; ++i)
 		{
@@ -77,7 +72,7 @@ int main()
 	string msg = "_setup";
 	msg += " " + toString(thegame.playerNum);
 	msg += " " + toString(boardsize);
-	Server.broadcast(msg.c_str());
+	Server.networkComponent->Broadcast(msg.c_str());
 	cout << "done." << endl;
 
 	cout << "Giving out land...";
@@ -206,11 +201,11 @@ int main()
 		msg += " " + toString(i);
 		msg += " " + toString(p);
 		msg += " " + (int)thegame.players[j - 1].c;
-		Server.broadcast(msg.c_str());
+		Server.networkComponent->Broadcast(msg.c_str());
 		msg = "_buy base " + toString(i);
 		msg += " " + toString(p);
 		msg += " " + toString((int)thegame.players[j - 1].c);
-		Server.broadcast(msg.c_str());
+		Server.networkComponent->Broadcast(msg.c_str());
 		temp = new rotator(getHexagon(&thegame, i, p)->x, getHexagon(&thegame, i, p)->z, thegame.players[j - 1].c, i, p, "base");
 		thegame.objects.insert(thegame.objects.end(), temp);
 	}
@@ -221,8 +216,7 @@ int main()
 	//remain active until last player has left, then shut down the server
 	while(!Server.empty())
 	{
-		if(Server.recv())
-			Server.handleSMsg(&thegame);
+		Server.handleMessages();
 	}
 	
 	return 0;
@@ -232,8 +226,7 @@ void play_game()
 {
 	while(!thegame.over)
 	{
-		if(Server.recv())
-			Server.handleMsg(&thegame);
+		Server.handleMessages();
 		if(thegame.turn > thegame.playerNum)
 			thegame.turn = 1;
 	}
@@ -242,7 +235,7 @@ void play_game()
 void recalculateTurns()
 {
 	int actives = 0;
-	for(int i = 0; i < 6; ++i)
+	for(int i = 0; i < CLIENTS; ++i)
 	{
 		if(thegame.players[i].active)
 			++actives;
@@ -254,7 +247,7 @@ void recalculateTurns()
 		while(!thegame.players[thegame.turn - 1].active)
 		{
 			++thegame.turn;
-			if(thegame.turn == 6)
+			if(thegame.turn == CLIENTS)
 				thegame.turn = 1;
 		}
 	}
@@ -329,7 +322,7 @@ action parseMessage(char buffer[])
 	return a;
 }
 
-void doAction(action& tempAction, sockaddr_in clientA)
+void doAction(action& tempAction, unsigned int clientNum)
 {
 	string msg;
 	if(tempAction.name == "_endturn")
@@ -337,13 +330,13 @@ void doAction(action& tempAction, sockaddr_in clientA)
 		recalculateMoney(thegame.players[thegame.turn - 1]);
 		if(thegame.players[thegame.turn - 1].peschkes < 1)
 		{
-			Server.send("Game over for you.", clientA);
+			Server.networkComponent->Send("Game over for you.", clientNum);
 			thegame.players[thegame.turn - 1].active = false;
 		}
 		++(thegame.turn);
 		msg = "player";
 		msg += ((thegame.turn) - 1) + " has ended their turn.";
-		Server.broadcast(msg.c_str());
+		Server.networkComponent->Broadcast(msg.c_str());
 	}
 	else if(tempAction.name == "_grab")
 	{
@@ -354,16 +347,16 @@ void doAction(action& tempAction, sockaddr_in clientA)
 			getHexagon(&thegame, tempAction.int1, tempAction.int2)->c = thegame.players[thegame.turn - 1].c;
 			msg = "_peschkes ";
 			msg += thegame.players[thegame.turn - 1].peschkes;
-			Server.send(msg.c_str(), clientA);
+			Server.networkComponent->Send(msg.c_str(), clientNum);
 			msg = " _grab ";
 			msg += tempAction.int1;
 			msg += " " + tempAction.int2;
 			msg += " p" + thegame.turn;
-			Server.broadcast(msg.c_str());
+			Server.networkComponent->Broadcast(msg.c_str());
 		}
 		else
 		{
-			Server.send("Either you're broke, that land is already occupied or it's out of range.", clientA);
+			Server.networkComponent->Send("Either you're broke, that land is already occupied or it's out of range.", clientNum);
 		}
 	}
 	else if(tempAction.name == "_move")
@@ -380,7 +373,7 @@ void doAction(action& tempAction, sockaddr_in clientA)
 				if(temp2)
 				{
 					if(stronger(temp, temp2) != temp || temp2->c == thegame.players[thegame.turn - 1].c || thegame.players[thegame.turn - 1].peschkes <= PLOTPRICE)
-						Server.send("You cannot move that object to that location.", clientA);
+						Server.networkComponent->Send("You cannot move that object to that location.", clientNum);
 					else
 					{
 						cout << "Player" << thegame.turn << " has moved a" << temp->_type << "." << endl;
@@ -390,12 +383,12 @@ void doAction(action& tempAction, sockaddr_in clientA)
 						//player is implied by color of object moved, no need to send
 						msg = "_peschkes ";
 						msg += thegame.players[thegame.turn - 1].peschkes;
-						Server.send(msg.c_str(), clientA);
+						Server.networkComponent->Send(msg.c_str(), clientNum);
 						msg = "_move " + tempAction.int1;
 						msg += " " + tempAction.int2;
 						msg += " " + tempAction.int3;
 						msg += " " + tempAction.int4;
-						Server.broadcast(msg.c_str());
+						Server.networkComponent->Broadcast(msg.c_str());
 					}
 				}
 				else
@@ -407,21 +400,21 @@ void doAction(action& tempAction, sockaddr_in clientA)
 					//player is implied by color of object moved, no need to send
 					msg = "_peschkes ";
 					msg += thegame.players[thegame.turn - 1].peschkes;
-					Server.send(msg.c_str(), clientA);
+					Server.networkComponent->Send(msg.c_str(), clientNum);
 					msg = "_move " + tempAction.int1;
 					msg += " " + tempAction.int2;
 					msg += " " + tempAction.int3;
 					msg += " " + tempAction.int4;
-					Server.broadcast(msg.c_str());
+					Server.networkComponent->Broadcast(msg.c_str());
 				}
 			}
 			else
 			{
-				Server.send("You do not own that!", clientA);
+				Server.networkComponent->Send("You do not own that!", clientNum);
 			}
 		}
 		else
-			Server.send("There's nothing to move at that location.", clientA);
+			Server.networkComponent->Send("There's nothing to move at that location.", clientNum);
 	}
 	else if(tempAction.name == "_buy")
 	{
@@ -435,25 +428,25 @@ void doAction(action& tempAction, sockaddr_in clientA)
 				thegame.players[thegame.turn - 1].peschkes -= price;
 				msg = "_peschkes ";
 				msg += thegame.players[thegame.turn - 1].peschkes;
-				Server.send(msg.c_str(), clientA);
+				Server.networkComponent->Send(msg.c_str(), clientNum);
 				msg = "_buy ";
 				msg += tempAction.item;
 				msg += " " + tempAction.int1;
 				msg += " " + tempAction.int2;
-				Server.broadcast(msg.c_str());
+				Server.networkComponent->Broadcast(msg.c_str());
 				cout << "Player" << thegame.turn << " has bought a " << tempAction.item << "." << endl;
 				base* temp = new rotator(getHexagon(&thegame, tempAction.int1, tempAction.int2)->x, getHexagon(&thegame, tempAction.int1, tempAction.int2)->z, thegame.players[thegame.turn - 1].c, tempAction.int1, tempAction.int2, tempAction.item);
 				thegame.objects.insert(thegame.objects.end(), temp);
 				temp = NULL;
 			}
 			else
-				Server.send("You cannot put anything there.", clientA);
+				Server.networkComponent->Send("You cannot put anything there.", clientNum);
 		}
 		else
 		{
 			msg = "You do not have enough money (";
 			msg += thegame.players[thegame.turn - 1].peschkes + " peschkes)";
-			Server.send(msg.c_str(), clientA);
+			Server.networkComponent->Send(msg.c_str(), clientNum);
 		}
 	}
 	else if(tempAction.name == "_request")
@@ -462,7 +455,7 @@ void doAction(action& tempAction, sockaddr_in clientA)
 		string colors[] = {"white", "red", "green", "blue", "yellow", "orange", "cyan"};
 		for(int i = 0; i < thegame.playerNum; ++i)
 		{
-			if(thegame.players[i].active && colors[(int)thegame.players[i].c] == tempAction.item)	/*HERE*/
+			if(thegame.players[i].active && colors[(int)thegame.players[i].c] == tempAction.item)
 			{
 				found = true;
 				break;
@@ -470,10 +463,10 @@ void doAction(action& tempAction, sockaddr_in clientA)
 		}
 		if(!found)
 		{
-			player* p = getPlayer(thegame.players, clientA);
+			player* p = &thegame.players[clientNum];
 			//granted
 			msg = "_granted " + tempAction.item;
-			Server.send(msg.c_str(), clientA);
+			Server.networkComponent->Send(msg.c_str(), clientNum);
 			for(int i = 0; i < 7; ++i)
 			{
 				if(tempAction.item == colors[i])
@@ -484,19 +477,19 @@ void doAction(action& tempAction, sockaddr_in clientA)
 			}
 
 			msg = "_taken " + tempAction.item;
-			Server.broadcast(msg.c_str());
+			Server.networkComponent->Broadcast(msg.c_str());
 			cout << tempAction.item << " has been selected" << endl;
 		}
 		else
 		{
 			//taken
 			msg = "_taken " + tempAction.item;
-			Server.send(msg.c_str(), clientA);
+			Server.networkComponent->Send(msg.c_str(), clientNum);
 		}
 	}
 	else
 	{
-		Server.send("Unsupported command!", clientA);
+		Server.networkComponent->Send("Unsupported command!", clientNum);
 	}
 	return;
 }

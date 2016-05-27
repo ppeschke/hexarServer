@@ -9,13 +9,13 @@ using namespace std;
 class Game
 {
 public:
-	Game(void);
+	Game(unsigned int pN);
 	~Game(void);
 
 	void CleanObjs();
 
 	list<base*> objects;
-	player players[6];
+	player players[2];
 	bool over;
 	int playerNum;
 	int turn;

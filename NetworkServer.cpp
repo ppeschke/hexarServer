@@ -42,6 +42,7 @@ void NetworkServer::Listen()
 		if(recvfrom(Socket, Buffer, 256, 0, (sockaddr*)&IncomingAddress, &AddressLength))
 		{
 			Buffer[255] = '\0';	//security! always end packet with this
+
 			if(Buffer[0] == 1)	//knock packet
 			{
 				for(int i = 0; i < CLIENTS; ++i)	//search for an empty address
@@ -79,8 +80,22 @@ void NetworkServer::Listen()
 			}
 			else
 			{
-				//cout << "Server Broadcasting: " << Buffer << endl;
-				Broadcast(Buffer);
+				unsigned int client = 42;	//secret number
+				for(int i = 0; i < CLIENTS; ++i)
+				{
+					if(ClientAddresses[i].sin_addr.s_addr == IncomingAddress.sin_addr.s_addr)
+					{
+						client = i;
+						break;
+					}
+				}
+				if(client != 42)
+				{
+					//add to queue
+					locker.lock();
+					messages.insert(messages.end(), Message(Buffer, client));
+					locker.unlock();
+				}
 			}
 		}
 	}
@@ -104,4 +119,15 @@ DWORD WINAPI ThreadFunction(LPVOID Whatever)
 {
 	((NetworkServer*)Whatever)->Listen();
 	return 0;
+}
+
+unsigned int NetworkServer::ClientCount()
+{
+	unsigned int count = 0;
+	for(int i = 0; i < CLIENTS; ++i)
+	{
+		if(ClientAddresses[i].sin_family)
+			++count;
+	}
+	return count;
 }
