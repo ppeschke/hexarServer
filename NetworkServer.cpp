@@ -24,8 +24,10 @@ NetworkServer::NetworkServer()
 
 	ZeroMemory(&ServerAddress, AddressLength);
 	ServerAddress.sin_family = AF_INET;
-	ServerAddress.sin_port = port;
-	bind(Socket, (sockaddr*)&ServerAddress, AddressLength);
+	u_short IpnetShort;
+	WSAHtons(Socket, port, &IpnetShort);
+	ServerAddress.sin_port =  IpnetShort;
+	int result = ::bind(Socket, (sockaddr*)&ServerAddress, AddressLength);
 
 	ListenThreadHandle = CreateThread(NULL, 0, ThreadFunction, this, 0, NULL);
 }
@@ -41,9 +43,13 @@ NetworkServer::~NetworkServer()
 
 void NetworkServer::Listen()
 {
+	unsigned int size;
 	while(running)
 	{
-		if(recvfrom(Socket, Buffer, 256, 0, (sockaddr*)&IncomingAddress, &AddressLength))
+		size = recvfrom(Socket, Buffer, 256, 0, (sockaddr*)&IncomingAddress, &AddressLength);
+		if (size == -1)
+			cout << "Error: " << WSAGetLastError() << endl;
+		if(size > 0)
 		{
 			Buffer[255] = '\0';	//security! always end packet with this
 			if(IncomingAddress.sin_addr.s_addr == ZeroAddress.sin_addr.s_addr)
@@ -69,7 +75,7 @@ void NetworkServer::Listen()
 				{
 					if(ClientAddresses[i].sin_addr.s_addr == IncomingAddress.sin_addr.s_addr)
 					{
-						Buffer[0] = 0;
+						Buffer[0] = '\0';
 						Send(Buffer, i);
 						ZeroMemory(&ClientAddresses[i], sizeof(sockaddr_in));
 						cout << "Client " << i << " has disconnected." << endl;
@@ -80,11 +86,11 @@ void NetworkServer::Listen()
 					else if(ClientAddresses[i].sin_family)
 						found = true;
 				}
-				/*if(!found)
+				if(!found)
 				{
 					cout << "No clients left... quitting server..." << endl;
 					running = false;
-				}*/
+				}
 			}
 			else
 			{

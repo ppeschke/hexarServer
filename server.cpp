@@ -9,18 +9,18 @@ void recalculateTurns();
 void recalculateMoney(player& p);
 action parseMessage(char []);
 
-//player* getPlayer(player players[], sockaddr_in addy);
+player* getPlayer(player players[], sockaddr_in addy);
 void doAction(action& tempAction, unsigned int clientA);
 
-//player* getPlayer(player players[], sockaddr_in addy)
-//{
-//	for(int i = 0; i < CLIENTS; ++i)
-//	{
-//		//if(addy.sin_addr.s_addr == ClientAddress[i].sin_addr.s_addr)
-//			//return &(players[i]);
-//	}
-//	return NULL;
-//}
+player* getPlayer(player players[], sockaddr_in addy)
+{
+	for(int i = 0; i < CLIENTS; ++i)
+	{
+		/*if(addy.sin_addr.s_addr == ClientAddress[i].sin_addr.s_addr)
+			return &(players[i]);*/
+	}
+	return NULL;
+}
 
 server::server(NetworkServer* ns)
 {
@@ -29,6 +29,11 @@ server::server(NetworkServer* ns)
 
 server::~server(void)
 {
+}
+
+bool server::isRunning()
+{
+	return this->networkComponent->running;
 }
 
 void server::handleMessages()

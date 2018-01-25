@@ -34,7 +34,7 @@ int main()
 	bool picked = false;	//indicates if they've picked their colors
 	//setup phase
 	cout << "waiting for " << thegame.playerNum << " players to connect" << endl;
-	while(!picked)
+	while(!picked && Server.isRunning())
 	{
 		Server.handleMessages();
 		picked = true;

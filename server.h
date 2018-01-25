@@ -11,4 +11,5 @@ public:
 	~server(void);
 	void handleMessages();
 	bool empty();
+	bool isRunning();
 };
