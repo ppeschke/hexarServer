@@ -25,6 +25,7 @@ base* stronger(base* a, base* b);
 bool next(Game* thegame, color c, int i, int p);
 base* rcoords(Game* thegame, int i, int p);
 string toString(int);
+void delay(int);
 
 int main()
 {
@@ -32,8 +33,14 @@ int main()
 	if(boardsize < thegame.playerNum * 2)
 		boardsize = thegame.playerNum * 2;
 	bool picked = false;	//indicates if they've picked their colors
-	//setup phase
+	
 	cout << "waiting for " << thegame.playerNum << " players to connect" << endl;
+	while (networkServer.ClientCount() < CLIENTS && Server.isRunning())
+	{}
+	delay(1000);
+	cout << "All clients connected... sending menu command" << endl;
+	networkServer.Broadcast("_menu");
+	//setup phase
 	while(!picked && Server.isRunning())
 	{
 		Server.handleMessages();
@@ -59,7 +66,6 @@ int main()
 			{
 				temp = new hexagon(x, rz, white, i, p);
 				thegame.objects.insert(thegame.objects.end(), temp);
-				//Render(thegame);
 				x -= 2.5;
 			}
 			count += (i + 1 < boardsize ? 1 : -1);
@@ -200,7 +206,7 @@ int main()
 		msg = "_grab";
 		msg += " " + toString(i);
 		msg += " " + toString(p);
-		msg += " " + (int)thegame.players[j - 1].c;
+		msg += " " + toString((int)thegame.players[j - 1].c);
 		Server.networkComponent->Broadcast(msg.c_str());
 		msg = "_buy base " + toString(i);
 		msg += " " + toString(p);
@@ -210,6 +216,7 @@ int main()
 		thegame.objects.insert(thegame.objects.end(), temp);
 	}
 	cout << "done." << endl;
+	delay(1000);
 	
 	play_game();
 	
@@ -222,8 +229,15 @@ int main()
 	return 0;
 }
 
+void delay(int time)
+{
+	DWORD delayer = GetTickCount();
+	while (GetTickCount() < delayer + time) {}
+}
+
 void play_game()
 {
+	networkServer.Broadcast("_play");
 	while(!thegame.over)
 	{
 		Server.handleMessages();

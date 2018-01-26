@@ -61,8 +61,11 @@ void NetworkServer::Listen()
 					if(!ClientAddresses[i].sin_family)
 					{
 						ClientAddresses[i] = IncomingAddress;
+						strcpy_s(Buffer, " (Acknowledge Packet)");
+						Buffer[0] = 1;
+						cout << "Sending Acknowledgement" << endl;
+						Send(Buffer, i);	//acknowledge knock
 						cout << "Server Broadcasting: Client has connected. Welcome!" << endl;
-						serverfile << "Server Broadcasting: Client has connected. Welcome!" << endl;
 						Broadcast("Client has connected. Welcome!");
 						break;
 					}
@@ -79,7 +82,6 @@ void NetworkServer::Listen()
 						Send(Buffer, i);
 						ZeroMemory(&ClientAddresses[i], sizeof(sockaddr_in));
 						cout << "Client " << i << " has disconnected." << endl;
-						serverfile << "Client " << i << " has disconnected." << endl;
 						Broadcast("Client has disconnected.");
 						break;
 					}
@@ -118,6 +120,7 @@ void NetworkServer::Listen()
 
 void NetworkServer::Broadcast(const char* message)
 {
+	serverfile << "Broadcasting: " << message << endl;
 	for(int i = 0; i < CLIENTS; ++i)
 	{
 		if(ClientAddresses[i].sin_family)
@@ -127,6 +130,7 @@ void NetworkServer::Broadcast(const char* message)
 
 void NetworkServer::Send(const char* message, unsigned int client)
 {
+	serverfile << "Sending to client " << client << ": " << message << endl;
 	sendto(Socket, message, 256, 0, (sockaddr*)&ClientAddresses[client], sizeof(sockaddr));
 }
 

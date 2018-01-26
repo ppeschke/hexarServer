@@ -13,7 +13,7 @@ using namespace std;
 
 DWORD WINAPI ThreadFunction(LPVOID Whatever);
 
-#define CLIENTS 2
+#define CLIENTS 1
 
 class NetworkServer
 {
