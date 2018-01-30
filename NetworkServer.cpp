@@ -131,7 +131,8 @@ void NetworkServer::Broadcast(const char* message)
 void NetworkServer::Send(const char* message, unsigned int client)
 {
 	serverfile << "Sending to client " << client << ": " << message << endl;
-	sendto(Socket, message, 256, 0, (sockaddr*)&ClientAddresses[client], sizeof(sockaddr));
+	strcpy_s(Buffer, message);
+	sendto(Socket, Buffer, 256, 0, (sockaddr*)&ClientAddresses[client], sizeof(sockaddr));
 }
 
 DWORD WINAPI ThreadFunction(LPVOID Whatever)

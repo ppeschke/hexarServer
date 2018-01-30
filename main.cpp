@@ -215,6 +215,11 @@ int main()
 		temp = new rotator(getHexagon(&thegame, i, p)->x, getHexagon(&thegame, i, p)->z, thegame.players[j - 1].c, i, p, "base");
 		thegame.objects.insert(thegame.objects.end(), temp);
 	}
+	for (int j = 0; j < CLIENTS; ++j)
+	{
+		thegame.players[j].peschkes = 8;
+	}
+	Server.networkComponent->Broadcast("_peschkes 8");
 	cout << "done." << endl;
 	delay(1000);
 	
@@ -360,12 +365,12 @@ void doAction(action& tempAction, unsigned int clientNum)
 			thegame.players[thegame.turn - 1].peschkes -= PLOTPRICE;
 			getHexagon(&thegame, tempAction.int1, tempAction.int2)->c = thegame.players[thegame.turn - 1].c;
 			msg = "_peschkes ";
-			msg += thegame.players[thegame.turn - 1].peschkes;
+			msg += toString(thegame.players[thegame.turn - 1].peschkes);
 			Server.networkComponent->Send(msg.c_str(), clientNum);
-			msg = " _grab ";
-			msg += tempAction.int1;
-			msg += " " + tempAction.int2;
-			msg += " p" + thegame.turn;
+			msg = "_grab ";
+			msg += toString(tempAction.int1);
+			msg += " " + toString(tempAction.int2);
+			msg += " " + toString((int)thegame.players[thegame.turn - 1].c);
 			Server.networkComponent->Broadcast(msg.c_str());
 		}
 		else

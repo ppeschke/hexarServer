@@ -5,6 +5,7 @@ using namespace std;
 
 #include "player.h"
 #include "base.h"
+#include "NetworkServer.h"
 
 class Game
 {
@@ -15,7 +16,7 @@ public:
 	void CleanObjs();
 
 	list<base*> objects;
-	player players[2];
+	player players[CLIENTS];
 	bool over;
 	int playerNum;
 	int turn;
