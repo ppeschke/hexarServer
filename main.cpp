@@ -356,6 +356,8 @@ void doAction(action& tempAction, unsigned int clientNum)
 		msg = "player";
 		msg += ((thegame.turn) - 1) + " has ended their turn.";
 		Server.networkComponent->Broadcast(msg.c_str());
+		if (thegame.turn > CLIENTS)
+			thegame.turn = 1;
 	}
 	else if(tempAction.name == "_grab")
 	{
