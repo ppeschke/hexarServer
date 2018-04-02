@@ -440,7 +440,7 @@ void doAction(action& tempAction, unsigned int clientNum)
 	else if(tempAction.name == "_buy")
 	{
 		int price = (tempAction.item == "turret"? TURRETPRICE:(tempAction.item == "walker"? WALKERPRICE:BASEPRICE));
-		if(price < thegame.players[thegame.turn - 1].peschkes)
+		if(price <= thegame.players[thegame.turn - 1].peschkes)
 		{
 			//make sure the player owns it, and make sure there's nothing on it
 			if(getHexagon(&thegame, tempAction.int1, tempAction.int2)->c == thegame.players[thegame.turn - 1].c && !rcoords(&thegame, tempAction.int1, tempAction.int2))
@@ -452,8 +452,8 @@ void doAction(action& tempAction, unsigned int clientNum)
 				Server.networkComponent->Send(msg.c_str(), clientNum);
 				msg = "_buy ";
 				msg += tempAction.item;
-				msg += " " + tempAction.int1;
-				msg += " " + tempAction.int2;
+				msg += " " + toString(tempAction.int1);
+				msg += " " + toString(tempAction.int2);
 				Server.networkComponent->Broadcast(msg.c_str());
 				cout << "Player" << thegame.turn << " has bought a " << tempAction.item << "." << endl;
 				base* temp = new rotator(getHexagon(&thegame, tempAction.int1, tempAction.int2)->x, getHexagon(&thegame, tempAction.int1, tempAction.int2)->z, thegame.players[thegame.turn - 1].c, tempAction.int1, tempAction.int2, tempAction.item);
