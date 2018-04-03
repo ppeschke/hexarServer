@@ -325,12 +325,12 @@ action parseMessage(char buffer[])
 	{
 		index2 = b.find(" ", index + 1);
 		a.item = b.substr(index + 1, index2 - index - 1);
-		index = index2;
+		index = index2 + 1;
 		index2 = b.find(" ", index + 1);
-		a.int1 = atoi(b.substr(index, index2 - index - 1).c_str());
-		index = index2;
-		index2 = b.find(" ", index + 1);
-		a.int2 = atoi(b.substr(index, index2 - index - 1).c_str());
+		a.int1 = atoi(b.substr(index, index2 - index).c_str());
+		index = index2 + 1;
+		index2 = b.find(" ", index);
+		a.int2 = atoi(b.substr(index).c_str());
 	}
 	else if(a.name == "_endturn")
 	{}
@@ -403,7 +403,7 @@ void doAction(action& tempAction, unsigned int clientNum)
 							thegame.players[thegame.turn - 1].peschkes -= PLOTPRICE;
 						//player is implied by color of object moved, no need to send
 						msg = "_peschkes ";
-						msg += thegame.players[thegame.turn - 1].peschkes;
+						msg += toString(thegame.players[thegame.turn - 1].peschkes);
 						Server.networkComponent->Send(msg.c_str(), clientNum);
 						msg = "_move " + tempAction.int1;
 						msg += " " + tempAction.int2;
