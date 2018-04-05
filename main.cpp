@@ -23,7 +23,7 @@ bool nextTo(base* a, base* b);
 base* getHexagon(Game* thegame, int i, int p);
 base* stronger(base* a, base* b);
 bool next(Game* thegame, color c, int i, int p);
-base* rcoords(Game* thegame, int i, int p);
+base* getItem(Game* thegame, int i, int p);
 string toString(int);
 void delay(int);
 
@@ -217,9 +217,9 @@ int main()
 	}
 	for (int j = 0; j < CLIENTS; ++j)
 	{
-		thegame.players[j].peschkes = 8;
+		thegame.players[j].peschkes = 88;
 	}
-	Server.networkComponent->Broadcast("_peschkes 8");
+	Server.networkComponent->Broadcast("_peschkes 88");
 	cout << "done." << endl;
 	delay(1000);
 	
@@ -310,16 +310,21 @@ action parseMessage(char buffer[])
 	}
 	else if(a.name == "_move")
 	{
-		index2 = b.find(" ", index + 1);
-		a.int1 = atoi(b.substr(index, index2 - index - 1).c_str());
-		index = index2;
-		index2 = b.find(" ", index + 1);
-		a.int2 = atoi(b.substr(index, index2 - index - 1).c_str());
-		index = index2;
-		index2 = b.find(" ", index + 1);
-		a.int3 = atoi(b.substr(index, index2 - index - 1).c_str());
-		index = index2;
-		a.int4 = atoi(b.substr(index).c_str());
+		index += 1;
+		index2 = b.find_last_not_of(" ", index);
+		a.int1 = atoi(b.substr(index, (index2 - index) + 1).c_str());
+
+		index = index2 + 2;
+		index2 = b.find_last_not_of(" ", index);
+		a.int2 = atoi(b.substr(index, (index2 - index) + 1).c_str());
+
+		index = index2 + 2;
+		index2 = b.find_last_not_of(" ", index);
+		a.int3 = atoi(b.substr(index, (index2 - index) + 1).c_str());
+
+		index = index2 + 2;
+		index2 = b.find_last_not_of(" ", index);
+		a.int4 = atoi(b.substr(index, (index2 - index) + 1).c_str());
 	}
 	else if(a.name == "_buy")
 	{
@@ -384,48 +389,39 @@ void doAction(action& tempAction, unsigned int clientNum)
 	{
 		base* temp = NULL;
 		//make sure there's something there to move
-		if(temp = rcoords(&thegame, tempAction.int1, tempAction.int2))
+		if(temp = getItem(&thegame, tempAction.int1, tempAction.int2))
 		{
 			//make sure the player owns the first coords
 			if(thegame.players[thegame.turn - 1].c == temp->c)
 			{
-				base* temp2 = rcoords(&thegame, tempAction.int3, tempAction.int4);
+				base* temp2 = getItem(&thegame, tempAction.int3, tempAction.int4);
 				//if there's something else there
-				if(temp2)
+				if(temp2 && (stronger(temp, temp2) != temp || temp2->c == thegame.players[thegame.turn - 1].c || thegame.players[thegame.turn - 1].peschkes <= PLOTPRICE))
 				{
-					if(stronger(temp, temp2) != temp || temp2->c == thegame.players[thegame.turn - 1].c || thegame.players[thegame.turn - 1].peschkes <= PLOTPRICE)
-						Server.networkComponent->Send("You cannot move that object to that location.", clientNum);
-					else
-					{
-						cout << "Player" << thegame.turn << " has moved a" << temp->_type << "." << endl;
-						//if the player doesn't own the second coords
-						if(thegame.players[thegame.turn - 1].c != getHexagon(&thegame, tempAction.int3, tempAction.int4)->c)
-							thegame.players[thegame.turn - 1].peschkes -= PLOTPRICE;
-						//player is implied by color of object moved, no need to send
-						msg = "_peschkes ";
-						msg += toString(thegame.players[thegame.turn - 1].peschkes);
-						Server.networkComponent->Send(msg.c_str(), clientNum);
-						msg = "_move " + tempAction.int1;
-						msg += " " + tempAction.int2;
-						msg += " " + tempAction.int3;
-						msg += " " + tempAction.int4;
-						Server.networkComponent->Broadcast(msg.c_str());
-					}
+					Server.networkComponent->Send("You cannot move that object to that location.", clientNum);
 				}
 				else
 				{
+					base* item = getItem(&thegame, tempAction.int1, tempAction.int2);
+					base* hex = getHexagon(&thegame, tempAction.int3, tempAction.int4);
+					if (!(item && hex))
+						cout << "PROBLEM MOVING!!!!" << endl;
+					item->i = hex->i;
+					item->p = hex->p;
+					item->x = hex->x;
+					item->z = hex->z;
 					cout << "Player" << thegame.turn << " has moved a " << temp->_type << "." << endl;
 					//if the player doesn't own the second coords
 					if(thegame.players[thegame.turn - 1].c != getHexagon(&thegame, tempAction.int3, tempAction.int4)->c)
 						thegame.players[thegame.turn - 1].peschkes -= PLOTPRICE;
 					//player is implied by color of object moved, no need to send
 					msg = "_peschkes ";
-					msg += thegame.players[thegame.turn - 1].peschkes;
+					msg += toString(thegame.players[thegame.turn - 1].peschkes);
 					Server.networkComponent->Send(msg.c_str(), clientNum);
-					msg = "_move " + tempAction.int1;
-					msg += " " + tempAction.int2;
-					msg += " " + tempAction.int3;
-					msg += " " + tempAction.int4;
+					msg = "_move " + toString(tempAction.int1);
+					msg += " " + toString(tempAction.int2);
+					msg += " " + toString(tempAction.int3);
+					msg += " " + toString(tempAction.int4);
 					Server.networkComponent->Broadcast(msg.c_str());
 				}
 			}
@@ -443,7 +439,7 @@ void doAction(action& tempAction, unsigned int clientNum)
 		if(price <= thegame.players[thegame.turn - 1].peschkes)
 		{
 			//make sure the player owns it, and make sure there's nothing on it
-			if(getHexagon(&thegame, tempAction.int1, tempAction.int2)->c == thegame.players[thegame.turn - 1].c && !rcoords(&thegame, tempAction.int1, tempAction.int2))
+			if(getHexagon(&thegame, tempAction.int1, tempAction.int2)->c == thegame.players[thegame.turn - 1].c && !getItem(&thegame, tempAction.int1, tempAction.int2))
 			{
 				//player is implied by the color of the hexagon, no need to send that info
 				thegame.players[thegame.turn - 1].peschkes -= price;
@@ -535,12 +531,12 @@ base* getHexagon(Game* thegame, int i, int p)
 	return NULL;
 }
 
-base* rcoords(Game* thegame, int i, int p)
+base* getItem(Game* thegame, int i, int p)
 {
-	for(list<base*>::iterator index = thegame->objects.begin(); index != thegame->objects.end(); ++index)
+	for(list<base*>::reverse_iterator rindex = thegame->objects.rbegin(); rindex != thegame->objects.rend(); ++rindex)
 	{
-		if((*index)->rcoords(i, p))
-			return (*index);
+		if((*rindex)->rcoords(i, p))
+			return (*rindex);
 	}
 	return NULL;
 }

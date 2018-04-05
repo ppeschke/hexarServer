@@ -11,9 +11,9 @@ base::~base(void)
 {
 }
 
-bool base::coords(int, int)
+bool base::coords(int _i, int _p)
 {
-	return false;
+	return i == _i && p == _p;
 }
 
 bool base::rcoords(int, int)
