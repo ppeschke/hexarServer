@@ -352,10 +352,16 @@ void doAction(action& tempAction, unsigned int clientNum)
 	if(tempAction.name == "_endturn")
 	{
 		recalculateMoney(thegame.players[thegame.turn - 1]);
-		if(thegame.players[thegame.turn - 1].peschkes < 1)
+		if (thegame.players[thegame.turn - 1].peschkes < 1)
 		{
 			Server.networkComponent->Send("Game over for you.", clientNum);
 			thegame.players[thegame.turn - 1].active = false;
+		}
+		else
+		{
+			msg = "_peschkes ";
+			msg += toString(thegame.players[thegame.turn - 1].peschkes);
+			Server.networkComponent->Send(msg.c_str(), clientNum);
 		}
 		++(thegame.turn);
 		msg = "player";
@@ -444,7 +450,7 @@ void doAction(action& tempAction, unsigned int clientNum)
 				//player is implied by the color of the hexagon, no need to send that info
 				thegame.players[thegame.turn - 1].peschkes -= price;
 				msg = "_peschkes ";
-				msg += thegame.players[thegame.turn - 1].peschkes;
+				msg += toString(thegame.players[thegame.turn - 1].peschkes);
 				Server.networkComponent->Send(msg.c_str(), clientNum);
 				msg = "_buy ";
 				msg += tempAction.item;
