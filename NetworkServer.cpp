@@ -3,8 +3,16 @@
 #include <cstring>
 using namespace std;
 
-NetworkServer::NetworkServer()
+NetworkServer::NetworkServer(unsigned short cl)
 {
+	clients = cl;
+	ClientAddresses = new sockaddr_in[clients];
+	if (ClientAddresses == nullptr)
+	{
+		cout << "Allocating memory for clients failed... aborting." << endl;
+		system("pause");
+		exit(EXIT_FAILURE);
+	}
 	serverfile.open("NetworkServer.log");
 	running = true;
 	port = 17000;
@@ -18,7 +26,7 @@ NetworkServer::NetworkServer()
 
 	Socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 
-	for(int i = 0; i < CLIENTS; ++i)
+	for(int i = 0; i < clients; ++i)
 		ZeroMemory(&ClientAddresses[i], sizeof(sockaddr_in));
 	ZeroMemory(&ZeroAddress, sizeof(sockaddr_in));
 
@@ -35,6 +43,8 @@ NetworkServer::NetworkServer()
 
 NetworkServer::~NetworkServer()
 {
+	if (ClientAddresses != nullptr)
+		delete[] ClientAddresses;
 	serverfile.close();
 	running = false;
 	WaitForSingleObject(ListenThreadHandle, INFINITE);	//wait for listen thread to quit
@@ -56,7 +66,7 @@ void NetworkServer::Listen()
 				continue;
 			if(Buffer[0] == 1)	//knock packet
 			{
-				for(int i = 0; i < CLIENTS; ++i)	//search for an empty address
+				for(int i = 0; i < clients; ++i)	//search for an empty address
 				{
 					if(!ClientAddresses[i].sin_family)
 					{
@@ -74,7 +84,7 @@ void NetworkServer::Listen()
 			else if(Buffer[0] == 0)	//leave packet
 			{
 				bool found = false;
-				for(int i = 0; i < CLIENTS; ++i)
+				for(int i = 0; i < clients; ++i)
 				{
 					if(ClientAddresses[i].sin_addr.s_addr == IncomingAddress.sin_addr.s_addr)
 					{
@@ -97,7 +107,7 @@ void NetworkServer::Listen()
 			else
 			{
 				unsigned int client = 42;	//secret number
-				for(int i = 0; i < CLIENTS; ++i)
+				for(int i = 0; i < clients; ++i)
 				{
 					if(ClientAddresses[i].sin_addr.s_addr == IncomingAddress.sin_addr.s_addr)
 					{
@@ -121,7 +131,7 @@ void NetworkServer::Listen()
 void NetworkServer::Broadcast(const char* message)
 {
 	serverfile << "Broadcasting: " << message << endl;
-	for(int i = 0; i < CLIENTS; ++i)
+	for(int i = 0; i < clients; ++i)
 	{
 		if(ClientAddresses[i].sin_family)
 			Send(message, i);
@@ -144,7 +154,7 @@ DWORD WINAPI ThreadFunction(LPVOID Whatever)
 unsigned int NetworkServer::ClientCount()
 {
 	unsigned int count = 0;
-	for(int i = 0; i < CLIENTS; ++i)
+	for(int i = 0; i < clients; ++i)
 	{
 		if(ClientAddresses[i].sin_family)
 			++count;

@@ -6,10 +6,15 @@
 class server
 {
 public:
-	NetworkServer* networkComponent;
-	server(NetworkServer* ns);
+	server(unsigned short players);
 	~server(void);
 	void handleMessages();
 	bool empty();
 	bool isRunning();
+	Game* getGame() { return &thegame; }
+	NetworkServer* getNetwork() { return &network; }
+
+private:
+	Game thegame;
+	NetworkServer network;
 };

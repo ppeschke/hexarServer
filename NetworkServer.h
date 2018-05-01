@@ -13,18 +13,17 @@ using namespace std;
 
 DWORD WINAPI ThreadFunction(LPVOID Whatever);
 
-#define CLIENTS 1
-
 class NetworkServer
 {
 public:
-	NetworkServer();
+	NetworkServer(unsigned short clients);
 	~NetworkServer();
 
 	void Listen();
 	void Send(const char* message, unsigned int clientNum);
 	void Broadcast(const char* message);
 	unsigned int ClientCount();
+	unsigned short MaxClients() { return clients; }
 
 	ofstream serverfile;
 	mutex locker;
@@ -35,11 +34,14 @@ public:
 	sockaddr_in ServerAddress;
 	sockaddr_in IncomingAddress;
 	sockaddr_in ZeroAddress;
-	sockaddr_in ClientAddresses[CLIENTS];
+	sockaddr_in* ClientAddresses;
 	char Buffer[256];
 	int AddressLength;
 	volatile bool running;
 	HANDLE ListenThreadHandle;
+
+private:
+	unsigned short clients;
 };
 
 #endif

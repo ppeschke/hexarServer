@@ -16,7 +16,7 @@ public:
 	void CleanObjs();
 
 	list<base*> objects;
-	player players[CLIENTS];
+	player* players;
 	bool over;
 	int playerNum;
 	int turn;
