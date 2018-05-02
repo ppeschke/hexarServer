@@ -5,8 +5,15 @@ using namespace std;
 
 NetworkServer::NetworkServer(unsigned short cl)
 {
-	clients = cl;
-	ClientAddresses = new sockaddr_in[clients];
+	if (cl <= 6)
+		clients = cl;
+	else
+	{
+		cout << "Cannot have more than 6 clients! Aborting" << endl;
+		system("pause");
+		exit(EXIT_FAILURE);
+	}
+	ClientAddresses = new ClientAddress[clients];
 	if (ClientAddresses == nullptr)
 	{
 		cout << "Allocating memory for clients failed... aborting." << endl;
@@ -27,7 +34,7 @@ NetworkServer::NetworkServer(unsigned short cl)
 	Socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 
 	for(int i = 0; i < clients; ++i)
-		ZeroMemory(&ClientAddresses[i], sizeof(sockaddr_in));
+		ZeroMemory(&ClientAddresses[i].address, sizeof(sockaddr_in));
 	ZeroMemory(&ZeroAddress, sizeof(sockaddr_in));
 
 	ZeroMemory(&ServerAddress, AddressLength);
@@ -51,6 +58,7 @@ NetworkServer::~NetworkServer()
 	WSACleanup();
 }
 
+//this function is for the listen thread
 void NetworkServer::Listen()
 {
 	unsigned int size;
@@ -58,7 +66,7 @@ void NetworkServer::Listen()
 	{
 		size = recvfrom(Socket, Buffer, 256, 0, (sockaddr*)&IncomingAddress, &AddressLength);
 		if (size == -1)
-			cout << "Error: " << WSAGetLastError() << endl;
+			serverfile << "Error: " << WSAGetLastError() << endl;
 		if(size > 0)
 		{
 			Buffer[255] = '\0';	//security! always end packet with this
@@ -66,50 +74,57 @@ void NetworkServer::Listen()
 				continue;
 			if(Buffer[0] == 1)	//knock packet
 			{
+				clientLocker.lock();
 				for(int i = 0; i < clients; ++i)	//search for an empty address
 				{
-					if(!ClientAddresses[i].sin_family)
+					if(!ClientAddresses[i].address.sin_family)
 					{
-						ClientAddresses[i] = IncomingAddress;
-						strcpy_s(Buffer, " (Acknowledge Packet)");
-						Buffer[0] = 1;
-						cout << "Sending Acknowledgement" << endl;
-						Send(Buffer, i);	//acknowledge knock
-						cout << "Server Broadcasting: Client has connected. Welcome!" << endl;
-						Broadcast("Client has connected. Welcome!");
+						ClientAddresses[i].address = IncomingAddress;
+						strcpy_s(Buffer, "_join ");
+						Buffer[6] = i + 49;	//get the ascii character for the number of the client (+1 for non-zero-indexed player numbers in main thread)
+						Buffer[7] = '\0';
+						serverfile << "Adding to queue: " << Buffer << endl;
+						locker.lock();
+						messages.insert(messages.end(), Message(Buffer, i));
+						locker.unlock();
 						break;
 					}
 				}
+				clientLocker.unlock();
 			}
 			else if(Buffer[0] == 0)	//leave packet
 			{
 				bool found = false;
+				clientLocker.lock();
 				for(int i = 0; i < clients; ++i)
 				{
-					if(ClientAddresses[i].sin_addr.s_addr == IncomingAddress.sin_addr.s_addr)
+					if(ClientAddresses[i].address.sin_addr.s_addr == IncomingAddress.sin_addr.s_addr)
 					{
-						Buffer[0] = '\0';
-						Send(Buffer, i);
-						ZeroMemory(&ClientAddresses[i], sizeof(sockaddr_in));
-						cout << "Client " << i << " has disconnected." << endl;
-						Broadcast("Client has disconnected.");
+						strcpy_s(Buffer, "_leave ");
+						Buffer[7] = i + 49;	//get the ascii character for the number of the client
+						Buffer[8] = '\0';
+						serverfile << "Adding to queue: " << Buffer << endl;
+						locker.lock();
+						messages.insert(messages.end(), Message(Buffer, i));
+						locker.unlock();
 						break;
 					}
-					else if(ClientAddresses[i].sin_family)
+					else if(ClientAddresses[i].address.sin_family)
 						found = true;
 				}
+				clientLocker.unlock();
 				if(!found)
 				{
-					cout << "No clients left... quitting server..." << endl;
+					serverfile << "No clients left... quitting server..." << endl;
 					running = false;
 				}
 			}
 			else
 			{
-				unsigned int client = 42;	//secret number
+				unsigned int client = 42;	//impossible client number
 				for(int i = 0; i < clients; ++i)
 				{
-					if(ClientAddresses[i].sin_addr.s_addr == IncomingAddress.sin_addr.s_addr)
+					if(ClientAddresses[i].address.sin_addr.s_addr == IncomingAddress.sin_addr.s_addr)
 					{
 						client = i;
 						break;
@@ -118,7 +133,7 @@ void NetworkServer::Listen()
 				if(client != 42)
 				{
 					//add to queue
-					cout << "Adding to queue: " << Buffer << endl;
+					serverfile << "Adding to queue: " << Buffer << endl;
 					locker.lock();
 					messages.insert(messages.end(), Message(Buffer, client));
 					locker.unlock();
@@ -128,21 +143,23 @@ void NetworkServer::Listen()
 	}
 }
 
+//main thread
 void NetworkServer::Broadcast(const char* message)
 {
 	serverfile << "Broadcasting: " << message << endl;
 	for(int i = 0; i < clients; ++i)
 	{
-		if(ClientAddresses[i].sin_family)
+		if(ClientAddresses[i].address.sin_family)
 			Send(message, i);
 	}
 }
 
+//main thread
 void NetworkServer::Send(const char* message, unsigned int client)
 {
 	serverfile << "Sending to client " << client << ": " << message << endl;
 	strcpy_s(Buffer, message);
-	sendto(Socket, Buffer, 256, 0, (sockaddr*)&ClientAddresses[client], sizeof(sockaddr));
+	sendto(Socket, Buffer, 256, 0, (sockaddr*)&ClientAddresses[client].address, sizeof(sockaddr));
 }
 
 DWORD WINAPI ThreadFunction(LPVOID Whatever)
@@ -154,10 +171,28 @@ DWORD WINAPI ThreadFunction(LPVOID Whatever)
 unsigned int NetworkServer::ClientCount()
 {
 	unsigned int count = 0;
+	clientLocker.lock();
 	for(int i = 0; i < clients; ++i)
 	{
-		if(ClientAddresses[i].sin_family)
+		if(ClientAddresses[i].active)
 			++count;
 	}
+	clientLocker.unlock();
 	return count;
+}
+
+void NetworkServer::ActivateAddress(unsigned int clientNum)
+{
+	clientLocker.lock();
+	ClientAddresses[clientNum].active = true;
+	clientLocker.unlock();
+}
+
+//this function will run on the main thread
+void NetworkServer::DeactivateAddress(unsigned int clientNum)
+{
+	clientLocker.lock();
+	ClientAddresses[clientNum].active = false;
+	ZeroMemory(&ClientAddresses[clientNum].address, sizeof(sockaddr_in));
+	clientLocker.unlock();
 }

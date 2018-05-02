@@ -1,13 +1,13 @@
 #ifndef NETWORK_SERVER
 #define NETWORK_SERVER
 
-#define _WINSOCKAPI_
-#include <WinSock2.h>
+
 #include <list>
 #include <mutex>
 #include <fstream>
 using namespace std;
 #include "Message.h"
+#include "ClientAddress.h"
 
 #pragma comment(lib, "Ws2_32.lib")
 
@@ -24,9 +24,12 @@ public:
 	void Broadcast(const char* message);
 	unsigned int ClientCount();
 	unsigned short MaxClients() { return clients; }
+	void ActivateAddress(unsigned int clientNum);
+	void DeactivateAddress(unsigned int clientNum);
 
 	ofstream serverfile;
 	mutex locker;
+	mutex clientLocker;
 	list<Message> messages;
 	unsigned int port;
 	WSAData Winsock;
@@ -34,7 +37,7 @@ public:
 	sockaddr_in ServerAddress;
 	sockaddr_in IncomingAddress;
 	sockaddr_in ZeroAddress;
-	sockaddr_in* ClientAddresses;
+	ClientAddress* ClientAddresses;
 	char Buffer[256];
 	int AddressLength;
 	volatile bool running;

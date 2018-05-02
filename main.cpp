@@ -30,8 +30,10 @@ int main()
 	
 	cout << "waiting for " << thegame->playerNum << " players to connect" << endl;
 	while (Server.getNetwork()->ClientCount() < Server.getNetwork()->MaxClients() && Server.isRunning())
-	{}
-	delay(1000);
+	{
+		Server.handleMessages();
+	}
+	Server.handleMessages();
 	cout << "All clients connected... sending menu command" << endl;
 	Server.getNetwork()->Broadcast("_menu");
 	//setup phase
@@ -336,6 +338,16 @@ action parseMessage(char buffer[])
 	else if(a.name == "_request")
 	{
 		a.item = b.substr(index + 1);
+	}
+	else if (a.name == "_join")
+	{
+		index2 = b.find(" ", index + 1);
+		a.int1 = atoi(b.substr(index + 1, index2 - index - 1).c_str());
+	}
+	else if (a.name == "_leave")
+	{
+		index2 = b.find(" ", index + 1);
+		a.int1 = atoi(b.substr(index + 1, index2 - index - 1).c_str());
 	}
 	return a;
 }

@@ -16,6 +16,7 @@ string toString(int);
 
 void doAction(action& tempAction, unsigned int clientNum, server* Server)
 {
+	static char buffer[256];
 	Game* thegame = Server->getGame();
 	string msg;
 	if (tempAction.name == "_endturn")
@@ -178,6 +179,26 @@ void doAction(action& tempAction, unsigned int clientNum, server* Server)
 			msg = "_taken " + tempAction.item;
 			Server->getNetwork()->Send(msg.c_str(), clientNum);
 		}
+	}
+	else if (tempAction.name == "_join")
+	{
+		//Acknowledge Packet
+		strcpy_s(buffer, " acknowledge packet");
+		buffer[0] = 1;
+		cout << "Sending Acknowledgement" << endl;
+		Server->getNetwork()->Send(buffer, tempAction.int1 - 1);	//-1 turns a player number into a client number
+		cout << "Server Broadcasting: Player " << tempAction.int1 << " has connected. Welcome!" << endl;
+		Server->getNetwork()->ActivateAddress(tempAction.int1 - 1);
+		Server->getNetwork()->Broadcast((string("Player ") + toString(tempAction.int1) + " has connected. Welcome!").c_str());
+	}
+	else if (tempAction.name == "_leave")
+	{
+		strcpy_s(buffer, " acknowledge packet");
+		buffer[0] = 0;
+		Server->getNetwork()->Send(buffer, tempAction.int1 - 1);	//-1 turns a player number into a client number
+		cout << "Player " << tempAction.int1 << " has disconnected." << endl;
+		Server->getNetwork()->DeactivateAddress(tempAction.int1 - 1);
+		Server->getNetwork()->Broadcast((string("Player ") + toString(tempAction.int1) + " has disconnected.").c_str());
 	}
 	else
 	{
