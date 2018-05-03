@@ -5,7 +5,7 @@
 #include <iostream>
 using namespace std;
 
-void recalculateTurns(server* Server);
+void nextTurn(server* Server);
 action parseMessage(char []);
 void doAction(action& tempAction, unsigned int clientA, server* Server);
 
@@ -30,7 +30,6 @@ void server::handleMessages()
 		action tempAction = parseMessage(  (*network.messages.begin()).message  );
 		doAction(tempAction, (*network.messages.begin()).fromPlayer, this);
 		network.messages.pop_front();
-		recalculateTurns(this);
 	}
 	network.locker.unlock();
 }

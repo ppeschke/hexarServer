@@ -8,6 +8,7 @@ using namespace std;
 #include "action.h"
 
 void play_game(server* Server);
+void nextTurn(server* Server);
 base* getHexagon(Game* thegame, int i, int p);
 action parseMessage(char []);
 float distance(float x1, float y1, float x2, float y2);
@@ -234,12 +235,13 @@ void play_game(server* Server)
 	while(!Server->getGame()->over)
 	{
 		Server->handleMessages();
+		nextTurn(Server);
 		if(Server->getGame()->turn > Server->getGame()->playerNum)
 			Server->getGame()->turn = 1;
 	}
 }
 
-void recalculateTurns(server* Server)
+void nextTurn(server* Server)
 {
 	int actives = 0;
 	for(int i = 0; i < Server->getNetwork()->MaxClients(); ++i)

@@ -5,6 +5,7 @@ using namespace std;
 #include "server.h"
 #include "rotator.h"
 
+void nextTurn(server* Server);
 float distance(float x1, float y1, float x2, float y2);
 bool nextTo(base* a, base* b);
 base* getHexagon(Game* thegame, int i, int p);
@@ -33,12 +34,10 @@ void doAction(action& tempAction, unsigned int clientNum, server* Server)
 			msg += toString(thegame->players[thegame->turn - 1].peschkes);
 			Server->getNetwork()->Send(msg.c_str(), clientNum);
 		}
-		++(thegame->turn);
 		msg = "player";
 		msg += ((thegame->turn) - 1) + " has ended their turn.";
 		Server->getNetwork()->Broadcast(msg.c_str());
-		if (thegame->turn > Server->getNetwork()->MaxClients())
-			thegame->turn = 1;
+		nextTurn(Server);
 	}
 	else if (tempAction.name == "_grab")
 	{
@@ -185,10 +184,10 @@ void doAction(action& tempAction, unsigned int clientNum, server* Server)
 		//Acknowledge Packet
 		strcpy_s(buffer, " acknowledge packet");
 		buffer[0] = 1;
+		Server->getNetwork()->ActivateAddress(tempAction.int1 - 1);
 		cout << "Sending Acknowledgement" << endl;
 		Server->getNetwork()->Send(buffer, tempAction.int1 - 1);	//-1 turns a player number into a client number
 		cout << "Server Broadcasting: Player " << tempAction.int1 << " has connected. Welcome!" << endl;
-		Server->getNetwork()->ActivateAddress(tempAction.int1 - 1);
 		Server->getNetwork()->Broadcast((string("Player ") + toString(tempAction.int1) + " has connected. Welcome!").c_str());
 	}
 	else if (tempAction.name == "_leave")

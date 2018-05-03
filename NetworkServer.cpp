@@ -149,7 +149,7 @@ void NetworkServer::Broadcast(const char* message)
 	serverfile << "Broadcasting: " << message << endl;
 	for(int i = 0; i < clients; ++i)
 	{
-		if(ClientAddresses[i].address.sin_family)
+		if(ClientAddresses[i].active)
 			Send(message, i);
 	}
 }
@@ -157,9 +157,14 @@ void NetworkServer::Broadcast(const char* message)
 //main thread
 void NetworkServer::Send(const char* message, unsigned int client)
 {
-	serverfile << "Sending to client " << client << ": " << message << endl;
-	strcpy_s(Buffer, message);
-	sendto(Socket, Buffer, 256, 0, (sockaddr*)&ClientAddresses[client].address, sizeof(sockaddr));
+	if (ClientAddresses[client].active)
+	{
+		serverfile << "Sending to client " << client << ": " << message << endl;
+		strcpy_s(Buffer, message);
+		sendto(Socket, Buffer, 256, 0, (sockaddr*)&ClientAddresses[client].address, sizeof(sockaddr));
+	}
+	else
+		serverfile << "Ignored sending \"" << message << "\" because the client isn't active." << endl;
 }
 
 DWORD WINAPI ThreadFunction(LPVOID Whatever)
