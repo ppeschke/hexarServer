@@ -17,7 +17,6 @@ base* stronger(base* a, base* b);
 bool next(Game* thegame, color c, int i, int p);
 base* getItem(Game* thegame, int i, int p);
 string toString(int);
-void delay(int);
 
 int main()
 {
@@ -217,7 +216,6 @@ int main()
 	}
 	Server.getNetwork()->Broadcast("_peschkes 88");
 	cout << "done." << endl;
-	delay(1000);
 	
 	play_game(&Server);
 	
@@ -228,12 +226,6 @@ int main()
 	}
 	
 	return 0;
-}
-
-void delay(int time)
-{
-	DWORD delayer = GetTickCount();
-	while (GetTickCount() < delayer + time) {}
 }
 
 void play_game(server* Server)
