@@ -27,8 +27,16 @@ void server::handleMessages()
 	network.locker.lock();
 	while(network.messages.size() > 0)
 	{
-		action tempAction = parseMessage(  (*network.messages.begin()).message  );
-		doAction(tempAction, (*network.messages.begin()).fromPlayer, this);
+		if((*network.messages.begin()).message[0] == '_')
+		{
+			action tempAction = parseMessage((*network.messages.begin()).message);
+			doAction(tempAction, (*network.messages.begin()).fromPlayer, this);
+		}
+		else
+		{
+			//chat message
+			this->network.Broadcast((*network.messages.begin()).message);
+		}
 		network.messages.pop_front();
 	}
 	network.locker.unlock();
