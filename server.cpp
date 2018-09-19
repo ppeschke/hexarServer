@@ -35,7 +35,18 @@ void server::handleMessages()
 		else
 		{
 			//chat message
-			this->network.Broadcast((*network.messages.begin()).message);
+			string colorNames[7] = { "White", "Red", "Green", "Blue", "Yellow", "Orange", "Cyan" };
+			Message firstMessage = (*network.messages.begin());
+			color c = thegame.players[firstMessage.fromPlayer].c;
+			string message;
+			if(c != white)
+			{
+				//append color name
+				message = colorNames[(int)c] + ": " + firstMessage.message;
+			}
+			else
+				message = firstMessage.message;
+			this->network.Broadcast(message.c_str());
 		}
 		network.messages.pop_front();
 	}
