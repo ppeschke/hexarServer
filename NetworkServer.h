@@ -5,9 +5,10 @@
 #include <list>
 #include <mutex>
 #include <fstream>
+#define _WINSOCKAPI_
+#include <WinSock2.h>
 using namespace std;
 #include "Message.h"
-#include "ClientAddress.h"
 
 #pragma comment(lib, "Ws2_32.lib")
 
