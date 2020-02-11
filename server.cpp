@@ -55,5 +55,5 @@ void server::handleMessages()
 
 bool server::empty()
 {
-	return (network.ClientCount() == 0);
+	return (network.ActiveClients() == 0);
 }

@@ -1,29 +1,31 @@
 #include "NetworkServer.h"
 #include <iostream>
 #include <cstring>
+#include <ws2tcpip.h>
 using namespace std;
 
 NetworkServer::NetworkServer(unsigned short cl)
 {
+	int opt = 1;	//true for reusable address (listensocket)
+
+	running = false;
 	if (cl <= 6)
-		clients = cl;
+	{
+		maxClients = cl;
+		activeClients = 0;
+	}
 	else
 	{
 		cout << "Cannot have more than 6 clients! Aborting" << endl;
 		system("pause");
 		exit(EXIT_FAILURE);
 	}
-	ClientAddresses = new ClientAddress[clients];
-	if (ClientAddresses == nullptr)
+	for (int i = 0; i < 6; ++i)
 	{
-		cout << "Allocating memory for clients failed... aborting." << endl;
-		system("pause");
-		exit(EXIT_FAILURE);
+		ClientSockets[i] = 0;
 	}
 	serverfile.open("NetworkServer.log");
-	running = true;
-	port = 17000;
-	AddressLength = sizeof(IncomingAddress);
+	listenPort = 17000;
 	WSAStartup(MAKEWORD(2, 2), &Winsock);
 	if(LOBYTE(Winsock.wVersion) != 2 || HIBYTE(Winsock.wVersion) != 2)
 	{
@@ -31,18 +33,36 @@ NetworkServer::NetworkServer(unsigned short cl)
 		exit(EXIT_FAILURE);
 	}
 
-	Socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+	ListenSocket = socket(AF_INET, SOCK_STREAM, 0);
+	if (ListenSocket == 0)
+	{
+		serverfile << "Failed to create listen socket." << endl;
+		WSACleanup();
+		return;
+	}
 
-	for(int i = 0; i < clients; ++i)
-		ZeroMemory(&ClientAddresses[i].address, sizeof(sockaddr_in));
-	ZeroMemory(&ZeroAddress, sizeof(sockaddr_in));
+	if (setsockopt(ListenSocket, SOL_SOCKET, SO_REUSEADDR, (char*)&opt, sizeof(opt)) < 0)
+	{
+		serverfile << "Failed to set socket options." << endl;
+		closesocket(ListenSocket);
+		WSACleanup();
 
-	ZeroMemory(&ServerAddress, AddressLength);
+	}
+
+	ZeroMemory(&ServerAddress, sizeof(ServerAddress));
 	ServerAddress.sin_family = AF_INET;
-	u_short IpnetShort;
-	WSAHtons(Socket, port, &IpnetShort);
-	ServerAddress.sin_port =  IpnetShort;
-	int result = ::bind(Socket, (sockaddr*)&ServerAddress, AddressLength);
+	ServerAddress.sin_addr.s_addr = INADDR_ANY;
+	ServerAddress.sin_port = htons(listenPort);
+
+	if (::bind(ListenSocket, (struct sockaddr*)&ServerAddress, sizeof(ServerAddress)) < 0)
+	{
+		serverfile << "Failed to bind." << endl;
+		closesocket(ListenSocket);
+		WSACleanup();
+		return;
+	}
+
+	running = true;
 
 	ListenThreadHandle = CreateThread(NULL, 0, ThreadFunction, this, 0, NULL);
 }
@@ -50,8 +70,6 @@ NetworkServer::NetworkServer(unsigned short cl)
 
 NetworkServer::~NetworkServer()
 {
-	if (ClientAddresses != nullptr)
-		delete[] ClientAddresses;
 	serverfile.close();
 	running = false;
 	WaitForSingleObject(ListenThreadHandle, INFINITE);	//wait for listen thread to quit
@@ -61,95 +79,174 @@ NetworkServer::~NetworkServer()
 //this function is for the listen thread
 void NetworkServer::Listen()
 {
-	unsigned int size;
-	while(running)
+	bool				listeningForNew = true;
+	ofstream			listenerLog("ListenThread.log");
+	int					activity;
+	fd_set				readFDs;	//fd's for select
+	struct timeval		timeout;
+	SOCKET				new_socket;
+	struct sockaddr_in	address;
+	int					addressLen = sizeof(address);
+	int					valRead;
+
+	timeout.tv_sec = 5;
+	timeout.tv_usec = 0;
+
+	while (running)
 	{
-		size = recvfrom(Socket, Buffer, 256, 0, (sockaddr*)&IncomingAddress, &AddressLength);
-		if (size == -1)
-			serverfile << "Error: " << WSAGetLastError() << endl;
-		if(size > 0)
+		FD_ZERO(&readFDs);
+
+		if (listeningForNew)
 		{
-			Buffer[255] = '\0';	//security! always end packet with this
-			if(IncomingAddress.sin_addr.s_addr == ZeroAddress.sin_addr.s_addr)
-				continue;
-			if(Buffer[0] == 1)	//knock packet
+			if (listen(ListenSocket, maxClients - activeClients) < 0)
 			{
-				clientLocker.lock();
-				for(int i = 0; i < clients; ++i)	//search for an empty address
-				{
-					if(!ClientAddresses[i].address.sin_family)
-					{
-						ClientAddresses[i].address = IncomingAddress;
-						strcpy_s(Buffer, "_join ");
-						Buffer[6] = i + 49;	//get the ascii character for the number of the client (+1 for non-zero-indexed player numbers in main thread)
-						Buffer[7] = '\0';
-						serverfile << "Adding to queue: " << Buffer << endl;
-						locker.lock();
-						messages.insert(messages.end(), Message(Buffer, i));
-						locker.unlock();
-						break;
-					}
-				}
-				clientLocker.unlock();
+				listenerLog << "Failure listening." << endl;
+				running = false;
+				break;
 			}
-			else if(Buffer[0] == 0)	//leave packet
+			//add the listen socket to the select list
+			FD_SET(ListenSocket, &readFDs);
+		}
+
+		//add any active clients to the select list
+		for (int i = 0; i < maxClients; ++i)
+		{
+			int sd = ClientSockets[i];
+			if (sd > 0)
 			{
-				bool found = false;
-				clientLocker.lock();
-				for(int i = 0; i < clients; ++i)
+				FD_SET(sd, &readFDs);
+			}
+		}
+
+		activity = select(0, &readFDs, NULL, NULL, &timeout);
+		if (activity == 0)
+		{
+			continue;	//timeout
+		}
+		else if (activity == SOCKET_ERROR)
+		{
+			int error = WSAGetLastError();
+			listenerLog << "Select failed with code " << error << endl;
+			running = false;
+			break;
+		}
+
+		if (listeningForNew && FD_ISSET(ListenSocket, &readFDs))
+		{
+			//incoming connection
+			listenerLog << "New Connection! Huzzah!" << endl;
+			if (INVALID_SOCKET == (new_socket = accept(ListenSocket, (struct sockaddr *)&address, &addressLen)))
+			{
+				int error = WSAGetLastError();
+				if (error == WSAEFAULT)
 				{
-					if(ClientAddresses[i].address.sin_addr.s_addr == IncomingAddress.sin_addr.s_addr)
-					{
-						strcpy_s(Buffer, "_leave ");
-						Buffer[7] = i + 49;	//get the ascii character for the number of the client
-						Buffer[8] = '\0';
-						serverfile << "Adding to queue: " << Buffer << endl;
-						locker.lock();
-						messages.insert(messages.end(), Message(Buffer, i));
-						locker.unlock();
-						break;
-					}
-					else if(ClientAddresses[i].address.sin_family)
-						found = true;
+					listenerLog << "Accepting new connection failed with code " << error << endl;
 				}
-				clientLocker.unlock();
-				if(!found)
-				{
-					serverfile << "No clients left... quitting server..." << endl;
-					running = false;
-				}
+				running = false;
+				break;
 			}
 			else
 			{
-				unsigned int client = 42;	//impossible client number
-				for(int i = 0; i < clients; ++i)
+				for (int i = 0; i < maxClients; ++i)
 				{
-					if(ClientAddresses[i].address.sin_addr.s_addr == IncomingAddress.sin_addr.s_addr)
+					if (ClientSockets[i] == 0)
 					{
-						client = i;
+						ClientSockets[i] = new_socket;
+						new_socket = 0;
+						++activeClients;
 						break;
 					}
 				}
-				if(client != 42)
+			}
+
+			for (int i = 0; i < maxClients; ++i)
+			{
+				if (ClientSockets[i] == 0)
 				{
-					//add to queue
-					serverfile << "Adding to queue: " << Buffer << endl;
+					char addrBuff[32];
+					InetNtop(AF_INET, &address, addrBuff, sizeof(addrBuff));
+					listenerLog << "New connection:Client Number=" << i
+						<< "\n\nAddress=" << addrBuff
+						<< "\nPort=" << ntohs(address.sin_port) << endl;
+					ClientSockets[i] = new_socket;
+					++activeClients;
+
+					strcpy_s(Buffer, "_join ");
+					Buffer[6] = i + 49;	//get the ascii character for the number of the client (+1 for non-zero-indexed player numbers in main thread)
+					Buffer[7] = '\0';
+					listenerLog << "Adding to queue: " << Buffer << endl;
 					locker.lock();
-					messages.insert(messages.end(), Message(Buffer, client));
+					messages.insert(messages.end(), Message(Buffer, i));
+					locker.unlock();
+					break;
+				}
+			}
+			if (activeClients == maxClients)
+			{
+				closesocket(ListenSocket);
+				listeningForNew = false;
+			}
+		}
+
+		//check for network input from active clients
+		for (int i = 0; i < maxClients; ++i)
+		{
+			if ((ClientSockets[i] != 0) && (FD_ISSET(ClientSockets[i], &readFDs)))
+			{
+				valRead = recv(ClientSockets[i], Buffer, 256, 0);
+				if (valRead == 0)
+				{
+					//disconnected
+					--activeClients;
+					listenerLog << "Client " << i << "disconnected." << endl;
+					strcpy_s(Buffer, "_leave ");
+					Buffer[7] = i + 49;	//get the ascii character for the number of the client
+					Buffer[8] = '\0';
+					listenerLog << "Adding to queue: " << Buffer << endl;
+					locker.lock();
+					messages.insert(messages.end(), Message(Buffer, i));
+					locker.unlock();
+					closesocket(ClientSockets[i]);
+					ClientSockets[i] = 0;
+					if (activeClients == 0)
+					{
+						running = false;
+					}
+				}
+				else
+				{
+					Buffer[valRead] = '\0';
+					//add to queue
+					listenerLog << "Adding to queue: " << Buffer << endl;
+					locker.lock();
+					messages.insert(messages.end(), Message(Buffer, i));
 					locker.unlock();
 				}
 			}
 		}
 	}
+	if (ListenSocket != 0)
+	{
+		closesocket(ListenSocket);
+	}
+	for (int i = 0; i < maxClients; ++i)
+	{
+		if (ClientSockets[i] != 0)
+		{
+			closesocket(ClientSockets[i]);
+			ClientSockets[i] = 0;
+		}
+	}
+	listenerLog.close();
 }
 
 //main thread
 void NetworkServer::Broadcast(const char* message)
 {
 	serverfile << "Broadcasting: " << message << endl;
-	for(int i = 0; i < clients; ++i)
+	for(int i = 0; i < maxClients; ++i)
 	{
-		if(ClientAddresses[i].active)
+		if(ClientSockets[i] != 0)
 			Send(message, i);
 	}
 }
@@ -157,11 +254,11 @@ void NetworkServer::Broadcast(const char* message)
 //main thread
 void NetworkServer::Send(const char* message, unsigned int client)
 {
-	if (ClientAddresses[client].active)
+	if (ClientSockets[client] != 0)
 	{
 		serverfile << "Sending to client " << client << ": " << message << endl;
 		strcpy_s(Buffer, message);
-		sendto(Socket, Buffer, 256, 0, (sockaddr*)&ClientAddresses[client].address, sizeof(sockaddr));
+		send(ClientSockets[client], Buffer, 256, 0);
 	}
 	else
 		serverfile << "Ignored sending \"" << message << "\" because the client isn't active." << endl;
@@ -171,33 +268,4 @@ DWORD WINAPI ThreadFunction(LPVOID Whatever)
 {
 	((NetworkServer*)Whatever)->Listen();
 	return 0;
-}
-
-unsigned int NetworkServer::ClientCount()
-{
-	unsigned int count = 0;
-	clientLocker.lock();
-	for(int i = 0; i < clients; ++i)
-	{
-		if(ClientAddresses[i].active)
-			++count;
-	}
-	clientLocker.unlock();
-	return count;
-}
-
-void NetworkServer::ActivateAddress(unsigned int clientNum)
-{
-	clientLocker.lock();
-	ClientAddresses[clientNum].active = true;
-	clientLocker.unlock();
-}
-
-//this function will run on the main thread
-void NetworkServer::DeactivateAddress(unsigned int clientNum)
-{
-	clientLocker.lock();
-	ClientAddresses[clientNum].active = false;
-	ZeroMemory(&ClientAddresses[clientNum].address, sizeof(sockaddr_in));
-	clientLocker.unlock();
 }

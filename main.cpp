@@ -22,6 +22,10 @@ string toString(int);
 int main()
 {
 	server Server(1);
+	if (!Server.isRunning())
+	{
+		return (1);
+	}
 	Game* thegame = Server.getGame();
 	int boardsize = 4;
 	if(boardsize < thegame->playerNum * 2)
@@ -29,11 +33,16 @@ int main()
 	bool picked = false;	//indicates if they've picked their colors
 	
 	cout << "waiting for " << thegame->playerNum << " players to connect" << endl;
-	while (Server.getNetwork()->ClientCount() < Server.getNetwork()->MaxClients() && Server.isRunning())
+	while (Server.getNetwork()->ActiveClients() < Server.getNetwork()->MaxClients() && Server.isRunning())
 	{
 		Server.handleMessages();
 	}
 	Server.handleMessages();
+	if (!Server.isRunning())
+	{
+		cout << "ERROR: Out of connection phase, and server is no longer running." << endl;
+		return(1);
+	}
 	cout << "All clients connected... sending menu command" << endl;
 	Server.getNetwork()->Broadcast("_menu");
 	//setup phase

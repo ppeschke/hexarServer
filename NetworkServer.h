@@ -22,29 +22,26 @@ public:
 	void Listen();
 	void Send(const char* message, unsigned int clientNum);
 	void Broadcast(const char* message);
-	unsigned int ClientCount();
-	unsigned short MaxClients() { return clients; }
-	void ActivateAddress(unsigned int clientNum);
-	void DeactivateAddress(unsigned int clientNum);
+	unsigned short MaxClients() { return maxClients; }
+	unsigned short ActiveClients() { return activeClients; }
 
 	ofstream serverfile;
 	mutex locker;
 	mutex clientLocker;
 	list<Message> messages;
-	unsigned int port;
+	unsigned int listenPort;
 	WSAData Winsock;
-	SOCKET Socket;
+	SOCKET ListenSocket;
 	sockaddr_in ServerAddress;
-	sockaddr_in IncomingAddress;
-	sockaddr_in ZeroAddress;
-	ClientAddress* ClientAddresses;
+	SOCKET ClientSockets[6];
 	char Buffer[256];
 	int AddressLength;
 	volatile bool running;
 	HANDLE ListenThreadHandle;
 
 private:
-	unsigned short clients;
+	unsigned short maxClients;
+	unsigned short activeClients;
 };
 
 #endif

@@ -184,19 +184,15 @@ void doAction(action& tempAction, unsigned int clientNum, server* Server)
 		//Acknowledge Packet
 		strcpy_s(buffer, " acknowledge packet");
 		buffer[0] = 1;
-		Server->getNetwork()->ActivateAddress(tempAction.int1 - 1);
 		cout << "Sending Acknowledgement" << endl;
-		Server->getNetwork()->Send(buffer, tempAction.int1 - 1);	//-1 turns a player number into a client number
+		Server->getNetwork()->Send(buffer, clientNum);
 		cout << "Server Broadcasting: Player " << tempAction.int1 << " has connected. Welcome!" << endl;
 		Server->getNetwork()->Broadcast((string("Player ") + toString(tempAction.int1) + " has connected. Welcome!").c_str());
 	}
 	else if (tempAction.name == "_leave")
 	{
-		strcpy_s(buffer, " acknowledge packet");
-		buffer[0] = 0;
-		Server->getNetwork()->Send(buffer, tempAction.int1 - 1);	//-1 turns a player number into a client number
+		//client's socket is already closed at this point (by the listen thread)
 		cout << "Player " << tempAction.int1 << " has disconnected." << endl;
-		Server->getNetwork()->DeactivateAddress(tempAction.int1 - 1);
 		Server->getNetwork()->Broadcast((string("Player ") + toString(tempAction.int1) + " has disconnected.").c_str());
 	}
 	else
