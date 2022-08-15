@@ -163,7 +163,7 @@ void NetworkServer::Listen()
 			{
 				if (ClientSockets[i] == 0)
 				{
-					char addrBuff[32];
+					wchar_t addrBuff[32];
 					InetNtop(AF_INET, &address, addrBuff, sizeof(addrBuff));
 					listenerLog << "New connection:Client Number=" << i
 						<< "\n\nAddress=" << addrBuff
